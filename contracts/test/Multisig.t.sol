@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import {Multisig} from "../src/Multisig.sol";
+import {Receiver} from "../src/Receiver.sol";
 
 contract MultisigTest is Test {
     Multisig internal multisig;
@@ -147,6 +148,24 @@ contract MultisigTest is Test {
         vm.prank(owner2);
         vm.expectRevert(Multisig.TxAlreadyExecuted.selector);
         multisig.execute(txId);
+    }
+
+    function test_ExecuteCanCallContractWithCalldata() public {
+        Receiver receiverContract = new Receiver();
+        bytes memory data = abi.encodeCall(Receiver.setX, (42));
+
+        uint256 txId = _submitTx(owner1, address(receiverContract), 0, data);
+
+        vm.prank(owner1);
+        multisig.approve(txId);
+
+        vm.prank(owner2);
+        multisig.approve(txId);
+
+        vm.prank(owner3);
+        multisig.execute(txId);
+
+        assertEq(receiverContract.x(), 42);
     }
 
     function _submitTx(
