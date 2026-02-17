@@ -34,14 +34,13 @@ This project demonstrates smart contract architecture, secure state management, 
 
 ```text
 multisig-wallet/
-├── contracts/          # Solidity smart contracts 
-│   ├── MultiSig.sol    # Main wallet logic
-│   └── AccessControl.sol
+├── contracts/          # Foundry smart contract workspace
+│   ├── src/            # Solidity smart contracts
+│   ├── test/           # Automated security & logic tests
+│   └── script/         # Deployment scripts for Sepolia Testnet
 ├── frontend/           # Next.js + Tailwind CSS web application
 │   ├── components/     # UI elements
 │   └── hooks/          # Wagmi/Viem logic for blockchain calls
-├── tests/              # Automated security & logic tests
-├── scripts/            # Deployment scripts for Sepolia Testnet
 └── README.md           # Documentation
 ```
 
