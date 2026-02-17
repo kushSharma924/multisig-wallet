@@ -12,9 +12,6 @@ A minimal T-of-N multisig wallet deployed on Sepolia. The system allows a group 
 - ETH transfer support  
 - Optional arbitrary contract call support  
 
-This project demonstrates smart contract architecture, secure state management, and frontend integration with on-chain logic.
-
-
 ## Architecture
 
 ```text
