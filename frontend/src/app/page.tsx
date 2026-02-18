@@ -2,7 +2,7 @@
 
 import multisigArtifact from "@/abi/Multisig.json";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   formatEther,
   isAddress,
@@ -14,6 +14,7 @@ import {
 } from "viem";
 import {
   useAccount,
+  useBalance,
   usePublicClient,
   useReadContract,
   useReadContracts,
@@ -31,11 +32,8 @@ type TransactionRow = {
 };
 
 const multisigAbi = multisigArtifact.abi as Abi;
-const configuredMultisigAddress = process.env.NEXT_PUBLIC_MULTISIG_ADDRESS;
-const multisigAddress =
-  configuredMultisigAddress && isAddress(configuredMultisigAddress)
-    ? (configuredMultisigAddress as Address)
-    : undefined;
+const MAX_OWNER_SCAN = 50;
+const ACCOUNT_NAME_STORAGE_PREFIX = "multisig.accountName";
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
@@ -49,10 +47,22 @@ function shortenHex(value: string, length = 6): string {
   return `${value.slice(0, length + 2)}...${value.slice(-length)}`;
 }
 
+function getAccountStorageKey(address: Address): string {
+  return `${ACCOUNT_NAME_STORAGE_PREFIX}.${address.toLowerCase()}`;
+}
+
 export default function HomePage() {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, connector } = useAccount();
   const publicClient = usePublicClient({ chainId: sepolia.id });
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
+  const configuredMultisigAddress = process.env.NEXT_PUBLIC_MULTISIG_ADDRESS;
+  const multisigAddress = useMemo(
+    () =>
+      configuredMultisigAddress && isAddress(configuredMultisigAddress)
+        ? (configuredMultisigAddress as Address)
+        : undefined,
+    [configuredMultisigAddress]
+  );
 
   const [to, setTo] = useState("");
   const [valueEth, setValueEth] = useState("0");
@@ -60,6 +70,78 @@ export default function HomePage() {
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [ownerCount, setOwnerCount] = useState<number | null>(null);
+  const [isOwnerCountLoading, setIsOwnerCountLoading] = useState(false);
+  const [ownerCountError, setOwnerCountError] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState("");
+  const [accountNameInput, setAccountNameInput] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOwnerCount() {
+      if (!multisigAddress || !publicClient) {
+        if (!cancelled) {
+          setOwnerCount(null);
+          setIsOwnerCountLoading(false);
+          setOwnerCountError(null);
+        }
+        return;
+      }
+
+      setIsOwnerCountLoading(true);
+      setOwnerCountError(null);
+
+      try {
+        let count = 0;
+        for (let index = 0; index < MAX_OWNER_SCAN; index += 1) {
+          try {
+            await publicClient.readContract({
+              abi: multisigAbi,
+              address: multisigAddress,
+              functionName: "owners",
+              args: [BigInt(index)],
+            });
+            count += 1;
+          } catch {
+            break;
+          }
+        }
+
+        if (!cancelled) {
+          setOwnerCount(count);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setOwnerCount(null);
+          setOwnerCountError(toErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsOwnerCountLoading(false);
+        }
+      }
+    }
+
+    void loadOwnerCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [multisigAddress, publicClient]);
+
+  useEffect(() => {
+    if (!address) {
+      setAccountName("");
+      setAccountNameInput("");
+      return;
+    }
+
+    const storageKey = getAccountStorageKey(address);
+    const stored = window.localStorage.getItem(storageKey) ?? "";
+    setAccountName(stored);
+    setAccountNameInput(stored);
+  }, [address]);
 
   const {
     data: threshold,
@@ -83,6 +165,17 @@ export default function HomePage() {
     abi: multisigAbi,
     address: multisigAddress,
     functionName: "getTransactionCount",
+    chainId: sepolia.id,
+    query: { enabled: Boolean(multisigAddress) },
+  });
+
+  const {
+    data: multisigBalance,
+    isLoading: isMultisigBalanceLoading,
+    error: multisigBalanceError,
+    refetch: refetchMultisigBalance,
+  } = useBalance({
+    address: multisigAddress,
     chainId: sepolia.id,
     query: { enabled: Boolean(multisigAddress) },
   });
@@ -166,9 +259,16 @@ export default function HomePage() {
     isWritePending ||
     Boolean(pendingAction);
 
+  useEffect(() => {
+    const m = threshold?.toString() ?? "-";
+    const n = ownerCount !== null ? ownerCount.toString() : "-";
+    document.title = `${m} of ${n} Multisig Wallet`;
+  }, [threshold, ownerCount]);
+
   async function refreshReads() {
     await refetchThreshold();
     await refetchTxCount();
+    await refetchMultisigBalance();
     await refetchTransactions();
     await refetchApprovals();
   }
@@ -178,6 +278,20 @@ export default function HomePage() {
     if (!multisigAddress) throw new Error("Invalid NEXT_PUBLIC_MULTISIG_ADDRESS.");
     if (chainId !== sepolia.id) throw new Error("Switch wallet network to Sepolia.");
     if (!publicClient) throw new Error("Sepolia RPC client is not available.");
+  }
+
+  function saveAccountName() {
+    if (!address) return;
+
+    const normalized = accountNameInput.trim();
+    const storageKey = getAccountStorageKey(address);
+    if (normalized) {
+      window.localStorage.setItem(storageKey, normalized);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
+
+    setAccountName(normalized);
   }
 
   async function handleApprove(txId: number) {
@@ -281,10 +395,40 @@ export default function HomePage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
           <div>
-            <h1 className="text-2xl font-semibold">Multisig Wallet</h1>
+            <h1 className="text-2xl font-semibold">
+              {(threshold ?? "-").toString()} of{" "}
+              {ownerCount !== null ? ownerCount : "-"} Multisig Wallet
+            </h1>
             <p className="text-sm text-slate-600">Sepolia</p>
           </div>
-          <ConnectButton />
+          <div className="flex flex-col items-end gap-2">
+            <ConnectButton />
+            {isConnected && connector?.name ? (
+              <div className="flex flex-col items-end gap-1 text-xs text-slate-600">
+                <p>Wallet: {connector.name}</p>
+                {address ? (
+                  <p>Account: {accountName || shortenHex(address)}</p>
+                ) : null}
+                {address ? (
+                  <input
+                    type="text"
+                    value={accountNameInput}
+                    onChange={(event) => setAccountNameInput(event.target.value)}
+                    onBlur={saveAccountName}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        saveAccountName();
+                        (event.currentTarget as HTMLInputElement).blur();
+                      }
+                    }}
+                    placeholder="Set account name"
+                    className="w-44 rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </header>
 
         {!multisigAddress ? (
@@ -300,7 +444,7 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-2">
+        <section className="grid gap-4 md:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-sm text-slate-600">Threshold</p>
             <p className="mt-2 text-xl font-semibold">
@@ -320,6 +464,36 @@ export default function HomePage() {
             </p>
             {txCountError ? (
               <p className="mt-2 text-sm text-red-600">{toErrorMessage(txCountError)}</p>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-sm text-slate-600">Multisig Balance</p>
+            <p className="mt-2 text-xl font-semibold">
+              {isMultisigBalanceLoading
+                ? "Loading..."
+                : multisigBalance
+                  ? `${formatEther(multisigBalance.value)} ${multisigBalance.symbol}`
+                  : "-"}
+            </p>
+            {multisigBalanceError ? (
+              <p className="mt-2 text-sm text-red-600">
+                {toErrorMessage(multisigBalanceError)}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-sm text-slate-600">Owners</p>
+            <p className="mt-2 text-xl font-semibold">
+              {isOwnerCountLoading
+                ? "Loading..."
+                : ownerCount !== null
+                  ? ownerCount
+                  : "-"}
+            </p>
+            {ownerCountError ? (
+              <p className="mt-2 text-sm text-red-600">{ownerCountError}</p>
             ) : null}
           </div>
         </section>
@@ -390,10 +564,14 @@ export default function HomePage() {
                   {transactions.map((tx) => {
                     const hasApproved = Boolean(approvedByTxId[tx.txId]);
                     const canApprove = !tx.executed && !hasApproved;
+                    const hasEnoughBalance = multisigBalance
+                      ? tx.value <= multisigBalance.value
+                      : true;
                     const canExecute =
                       !tx.executed &&
                       threshold !== undefined &&
-                      tx.numApprovals >= threshold;
+                      tx.numApprovals >= threshold &&
+                      hasEnoughBalance;
 
                     return (
                       <tr key={tx.txId} className="border-b border-slate-100">
