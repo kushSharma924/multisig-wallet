@@ -4,6 +4,8 @@
 
 A minimal T-of-N multisig wallet deployed on Sepolia. The system allows a group of owners to collectively approve and execute transactions once a configurable approval threshold is reached.
 
+[Demo Video](https://youtu.be/NqUBLLoDvv0)
+
 ## Features
 
 - Fully tested Solidity contract  
