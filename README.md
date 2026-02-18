@@ -118,3 +118,138 @@ multisig-wallet/
 - Owner management  
 - Signature-based off-chain approvals  
 - Formal verification  
+## Quickstart
+
+### Prerequisites
+
+- Node.js (v18+ recommended)
+- Foundry (forge/cast/anvil)
+- MetaMask (for Sepolia testing)
+- A Sepolia RPC endpoint (e.g., Alchemy)
+
+### Install
+
+Clone and install dependencies for both workspaces:
+
+```bash
+git clone <your-repo-url>
+cd multisig-wallet
+```
+
+**Contracts:**
+
+```bash
+cd contracts
+forge install
+forge build
+```
+
+**Frontend:**
+
+```bash
+cd ../frontend
+npm install
+```
+
+## Local Development (Anvil)
+
+### 1) Start a local chain
+
+```bash
+cd contracts
+anvil
+```
+
+### 2) Deploy locally
+
+In a second terminal:
+
+```bash
+cd contracts
+forge script script/Deploy.s.sol:DeployScript --broadcast --rpc-url [http://127.0.0.1:8545](http://127.0.0.1:8545)
+```
+
+### 3) Run the frontend against local chain
+
+Set your contract address in `frontend/.env.local` and start the dev server:
+
+```bash
+cd ../frontend
+npm run dev
+```
+
+---
+
+## Sepolia Deployment
+
+### 1) Configure environment variables (contracts)
+
+Create `contracts/.env` (do not commit):
+
+```bash
+cd contracts
+touch .env
+```
+
+**Example:**
+
+```text
+SEPOLIA_RPC_URL=[https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY](https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY)
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+OWNERS=0xOwnerA,0xOwnerB
+THRESHOLD=2
+```
+
+Make sure `.env` is gitignored.
+
+Load env vars into your shell:
+
+```bash
+cd contracts
+set -a
+source .env
+set +a
+```
+
+### 2) Deploy to Sepolia
+
+```bash
+forge script script/Deploy.s.sol:DeployScript --broadcast --rpc-url "$SEPOLIA_RPC_URL" --verify
+```
+
+Copy the deployed contract address from the output.
+
+## Frontend Configuration
+
+Create `frontend/.env.local` (also add this to your `.gitignore`):
+
+```text
+NEXT_PUBLIC_SEPOLIA_RPC_URL=[https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY](https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY)
+NEXT_PUBLIC_MULTISIG_ADDRESS=0xYOUR_DEPLOYED_CONTRACT_ADDRESS
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=YOUR_REOWN_PROJECT_ID
+```
+
+Then run:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:3000` and connect MetaMask on Sepolia.
+
+## Testing
+
+**Contracts:**
+
+```bash
+cd contracts
+forge test -vvv
+```
+
+**Frontend:**
+
+```bash
+cd frontend
+npm run dev
+```
