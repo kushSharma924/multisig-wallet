@@ -12,7 +12,6 @@ A minimal T-of-N multisig wallet deployed on Sepolia. The system allows a group 
 - Next.js frontend  
 - Event-driven UI  
 - ETH transfer support  
-- Optional arbitrary contract call support  
 
 ## Architecture
 
@@ -38,8 +37,6 @@ multisig-wallet/
 │   ├── test/           # Automated security & logic tests
 │   └── script/         # Deployment scripts for Sepolia Testnet
 ├── frontend/           # Next.js + Tailwind CSS web application
-│   ├── components/     # UI elements
-│   └── hooks/          # Wagmi/Viem logic for blockchain calls
 └── README.md           # Documentation
 ```
 
@@ -50,7 +47,6 @@ multisig-wallet/
 
 - Solidity ^0.8.x  
 - Foundry  
-- OpenZeppelin (security utilities)  
 
 ### Frontend
 
@@ -83,15 +79,6 @@ multisig-wallet/
 - Prevent double execution  
 - Emit events for all state transitions  
 - Accept ETH via `receive()`  
-
-#### Transaction Structure
-
-- `to`
-- `value`
-- `data`
-- `executed`
-- `numApprovals`  
-
 
 ### 2. Frontend
 
@@ -134,7 +121,7 @@ multisig-wallet/
 Clone and install dependencies for both workspaces:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/kushSharma924/multisig-wallet.git
 cd multisig-wallet
 ```
 
@@ -186,7 +173,7 @@ npm run dev
 
 ### 1) Configure environment variables (contracts)
 
-Create `contracts/.env` (do not commit):
+Create `contracts/.env`:
 
 ```bash
 cd contracts
